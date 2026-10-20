@@ -256,7 +256,7 @@ Insufficient stock`, and the distributor's stock never goes negative. See
 
 ---
 
-## 9. 5–10 Minute FA-1 Demo Sequence
+## 9. 5–10 Minute Demo Sequence
 
 1. **(0:00)** `docker compose up --build` → `docker compose ps` shows independent containers. *(Virtualization, Architecture)*
 2. **(1:00)** Log in as Pharmacy A → Dashboard: local inventory shows Dolo 650 LOW STOCK.
@@ -273,7 +273,7 @@ Insufficient stock`, and the distributor's stock never goes negative. See
 
 ---
 
-## 10. Viva Questions & Simple Answers
+## 10. Questions & Simple Answers
 
 **Q: Why is Main API "middleware" and not just a proxy?**
 A: It doesn't just forward requests — it discovers which distributors currently exist, fans a single logical query out to several of them in parallel, aggregates/normalizes their independent responses, applies a timeout so one slow node can't block the rest, and republishes results over WebSockets/RabbitMQ. Hiding all of that from the browser is exactly the middleware role.
