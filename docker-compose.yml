@@ -1,0 +1,227 @@
+version: '3.8'
+
+services:
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: mediconnect-rabbitmq
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    networks:
+      - mediconnect-net
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "check_running"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Distributor A/B/C run the SAME reusable image, configured only by
+  # environment variables (FA-1 §8-9 Scalability / Service Registration).
+  # Each self-registers with Main API on startup.
+  distributor-a:
+    build:
+      context: .
+      dockerfile: distributor_service/Dockerfile
+    container_name: mediconnect-distributor-a
+    environment:
+      - DISTRIBUTOR_ID=DIS001
+      - DISTRIBUTOR_NAME=HealthMed Distributors
+      - GRPC_PORT=50051
+      - GRPC_ADDRESS=distributor-a:50051
+      - DB_PATH=/data/distributor_dis001.db
+      - MAIN_API_URL=http://main-api:8000
+    volumes:
+      - distributor_a_data:/data
+    ports:
+      - "50051:50051"
+    networks:
+      - mediconnect-net
+
+  distributor-b:
+    build:
+      context: .
+      dockerfile: distributor_service/Dockerfile
+    container_name: mediconnect-distributor-b
+    environment:
+      - DISTRIBUTOR_ID=DIS002
+      - DISTRIBUTOR_NAME=CareSupply Healthcare
+      - GRPC_PORT=50051
+      - GRPC_ADDRESS=distributor-b:50051
+      - DB_PATH=/data/distributor_dis002.db
+      - MAIN_API_URL=http://main-api:8000
+      # Uncomment to demo Communication Delay (FA-1 §16):
+      # - SIMULATE_DELAY_MS=2500
+    volumes:
+      - distributor_b_data:/data
+    ports:
+      - "50052:50051"
+    networks:
+      - mediconnect-net
+
+  distributor-c:
+    build:
+      context: .
+      dockerfile: distributor_service/Dockerfile
+    container_name: mediconnect-distributor-c
+    environment:
+      - DISTRIBUTOR_ID=DIS003
+      - DISTRIBUTOR_NAME=MediWholesale
+      - GRPC_PORT=50051
+      - GRPC_ADDRESS=distributor-c:50051
+      - DB_PATH=/data/distributor_dis003.db
+      - MAIN_API_URL=http://main-api:8000
+    volumes:
+      - distributor_c_data:/data
+    ports:
+      - "50053:50051"
+    networks:
+      - mediconnect-net
+
+  # Distributor D is NOT started by default — bring it up live during the
+  # demo to show Scalability (FA-1 §8, §10, §37):
+  #   docker compose --profile scale up -d distributor-d
+  # It registers itself automatically; Main API needs zero code changes.
+  distributor-d:
+    build:
+      context: .
+      dockerfile: distributor_service/Dockerfile
+    container_name: mediconnect-distributor-d
+    profiles: ["scale"]
+    environment:
+      - DISTRIBUTOR_ID=DIS004
+      - DISTRIBUTOR_NAME=QuickPharma Wholesale
+      - GRPC_PORT=50051
+      - GRPC_ADDRESS=distributor-d:50051
+      - DB_PATH=/data/distributor_dis004.db
+      - MAIN_API_URL=http://main-api:8000
+    volumes:
+      - distributor_d_data:/data
+    ports:
+      - "50054:50051"
+    networks:
+      - mediconnect-net
+
+  # FA-1 Unit 4 — Distributed File System: three independent storage
+  # regions, each its own container + its own volume (like HDFS DataNodes).
+  # Same image for all three; only REGION_NAME differs.
+  storage-pune:
+    build:
+      context: .
+      dockerfile: storage_service/Dockerfile
+    container_name: mediconnect-storage-pune
+    environment:
+      - REGION_NAME=Pune
+      - STORAGE_DIR=/storage
+    volumes:
+      - storage_pune_data:/storage
+    ports:
+      - "9101:9000"
+    networks:
+      - mediconnect-net
+
+  storage-mumbai:
+    build:
+      context: .
+      dockerfile: storage_service/Dockerfile
+    container_name: mediconnect-storage-mumbai
+    environment:
+      - REGION_NAME=Mumbai
+      - STORAGE_DIR=/storage
+    volumes:
+      - storage_mumbai_data:/storage
+    ports:
+      - "9102:9000"
+    networks:
+      - mediconnect-net
+
+  storage-delhi:
+    build:
+      context: .
+      dockerfile: storage_service/Dockerfile
+    container_name: mediconnect-storage-delhi
+    environment:
+      - REGION_NAME=Delhi
+      - STORAGE_DIR=/storage
+    volumes:
+      - storage_delhi_data:/storage
+    ports:
+      - "9103:9000"
+    networks:
+      - mediconnect-net
+
+  main-api:
+    build:
+      context: .
+      dockerfile: main_api/Dockerfile
+    container_name: mediconnect-main-api
+    environment:
+      - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672/
+      - MAIN_DB_PATH=/data/main_api.db
+      - JWT_SECRET=mediconnect-dev-secret-change-in-prod
+      - UPLOAD_DIR=/uploads
+      - STORAGE_NODES=Pune=http://storage-pune:9000,Mumbai=http://storage-mumbai:9000,Delhi=http://storage-delhi:9000
+    volumes:
+      - main_api_data:/data
+      - uploads_data:/uploads
+    ports:
+      - "8000:8000"
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      distributor-a:
+        condition: service_started
+      distributor-b:
+        condition: service_started
+      distributor-c:
+        condition: service_started
+      storage-pune:
+        condition: service_started
+      storage-mumbai:
+        condition: service_started
+      storage-delhi:
+        condition: service_started
+    networks:
+      - mediconnect-net
+
+  notification-service:
+    build:
+      context: .
+      dockerfile: notification_service/Dockerfile
+    container_name: mediconnect-notification-service
+    environment:
+      - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672/
+      - MAIN_API_URL=http://main-api:8000
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      main-api:
+        condition: service_started
+    networks:
+      - mediconnect-net
+
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+    container_name: mediconnect-frontend
+    ports:
+      - "8080:80"
+    depends_on:
+      - main-api
+    networks:
+      - mediconnect-net
+
+volumes:
+  distributor_a_data:
+  distributor_b_data:
+  distributor_c_data:
+  distributor_d_data:
+  storage_pune_data:
+  storage_mumbai_data:
+  storage_delhi_data:
+  main_api_data:
+  uploads_data:
+
+networks:
+  mediconnect-net:
+    driver: bridge

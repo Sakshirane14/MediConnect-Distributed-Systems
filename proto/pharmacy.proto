@@ -1,0 +1,93 @@
+syntax = "proto3";
+
+package distributor;
+
+// FA-1 Unit 2 - Remote Procedure Call (gRPC).
+// Each Distributor runs as an independent, identically-coded DistributorService
+// node, configured only by environment variables (DISTRIBUTOR_ID,
+// DISTRIBUTOR_NAME, GRPC_PORT, DB_PATH). MediConnect's Main API (middleware)
+// calls these RPCs directly against each distributor's gRPC address; it
+// never touches a distributor's database directly. Adding Distributor D is
+// just: run this same image with different env vars + register it -- no
+// Main API code changes (this is the FA-1 Scalability demonstration).
+service DistributorService {
+  rpc SearchMedicine     (SearchMedicineRequest)     returns (SearchMedicineResponse);
+  rpc GetMedicineDetails (GetMedicineDetailsRequest) returns (MedicineDetails);
+  rpc PlaceOrder         (PlaceOrderRequest)         returns (PlaceOrderResponse);
+  rpc UpdateStock        (UpdateStockRequest)        returns (UpdateStockResponse);
+  rpc HealthCheck        (HealthCheckRequest)        returns (HealthCheckResponse);
+}
+
+message SearchMedicineRequest { string query = 1; }
+
+message MedicineResult {
+  string distributor_id = 1;
+  string medicine_id    = 2;
+  string name           = 3;
+  bool   available      = 4;
+  int32  quantity       = 5;
+  float  price          = 6;
+  string status         = 7;
+}
+
+message SearchMedicineResponse { repeated MedicineResult results = 1; }
+
+message GetMedicineDetailsRequest { string medicine_id = 1; }
+
+message MedicineDetails {
+  string medicine_id         = 1;
+  string name                = 2;
+  string description         = 3;
+  float  price                = 4;
+  int32  quantity            = 5;
+  bool   available           = 6;
+  string distributor_id      = 7;
+  int32  low_stock_threshold = 8;
+}
+
+// Called by the Main API when a pharmacy's order is APPROVED. Atomically
+// decrements this distributor's own stock -- the concurrency-safety
+// checkpoint lives here, at the actual owning node, not in the Main API.
+// This is also FA-1 Unit 3's Mutual Exclusion Algorithms in action: the
+// stock decrement is the critical section, and the atomic
+// "UPDATE ... WHERE quantity >= ?" is what enforces exclusive access to
+// that shared resource across concurrent requests.
+message PlaceOrderRequest {
+  string order_id     = 1;
+  string medicine_id  = 2;
+  int32  quantity     = 3;
+  string pharmacy_id  = 4;
+  int32  sender_lamport_clock = 5;  // Main API's clock at the moment of this call — Unit 3 Logical Clocks
+}
+
+message PlaceOrderResponse {
+  bool   success      = 1;
+  int32  new_quantity = 2;
+  string message      = 3;
+  int32  lamport_clock = 4;  // this node's clock immediately after the critical section — timestamps exactly when exclusive access was granted/denied
+}
+
+message UpdateStockRequest {
+  string medicine_id  = 1;
+  int32  new_quantity = 2;
+  string staff_id     = 3;
+}
+
+message UpdateStockResponse { bool success = 1; string message = 2; }
+
+message HealthCheckRequest {
+  // FA-1 Unit 3 — Clock Synchronization / Logical Clocks. Main API
+  // piggybacks its current Lamport clock value on every outgoing call;
+  // the node applies the standard receive rule (local = max(local,
+  // received) + 1) and hands its own updated value back in the response.
+  // This is what keeps the two independent processes' logical clocks
+  // causally consistent without either one owning a shared clock.
+  int32 sender_lamport_clock = 1;
+}
+message HealthCheckResponse {
+  string status            = 1;
+  string distributor_id    = 2;
+  string distributor_name  = 3;
+  int32  lamport_clock     = 4;  // this node's Lamport clock AFTER applying the receive rule
+  double server_unix_time  = 5;  // this node's wall-clock time at the moment of reply — used for Cristian's Algorithm clock-offset estimation
+}

@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Distributed Network Status — MediConnect</title>
+  <link rel="stylesheet" href="css/design-system.css">
+</head>
+<body>
+  <nav class="navbar">
+    <a href="index.html" class="nav-brand">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M2 12h20"/></svg>
+      MediConnect
+    </a>
+    <div class="nav-menu">
+      <a href="#" onclick="history.back(); return false;" class="btn btn-secondary" style="font-size: 13px; padding: 6px 12px;">← Back</a>
+    </div>
+  </nav>
+
+  <main class="container" style="margin-top: 24px; max-width: 700px;">
+    <h1 style="font-size: 22px; font-weight: 700; margin-bottom: 4px;">Distributed Network Status</h1>
+    <p style="color: var(--text-muted); font-size: 13px; margin-bottom: 20px;">
+      Live registry + real health-check data — this is what makes Fault Tolerance and Scalability visible (FA-1 §35).
+      Also carries Unit 3 (Synchronization) live: Logical Clocks, Clock Sync, Election, Mutual Exclusion, Global State.
+    </p>
+
+    <div class="grid" style="grid-template-columns: repeat(3, 1fr); gap: 14px; margin-bottom: 24px;">
+      <div class="card stat-card"><div class="stat-label">Registered Nodes</div><div class="stat-value" id="stat-registered">—</div></div>
+      <div class="card stat-card"><div class="stat-label">Online</div><div class="stat-value" id="stat-online" style="color: var(--status-avail-text);">—</div></div>
+      <div class="card stat-card"><div class="stat-label">Offline</div><div class="stat-value" id="stat-offline" style="color: var(--status-out-text);">—</div></div>
+    </div>
+
+    <div class="card">
+      <div class="card-header-row">
+        <h2 style="font-size: 16px; font-weight: 600;">Registered Distributor Nodes</h2>
+        <button class="btn btn-secondary" style="font-size: 12px;" onclick="loadStatus()">Refresh</button>
+      </div>
+      <div id="nodes-list">Loading...</div>
+    </div>
+
+    <!-- Unit 4: Distributed File System (replicated photo storage) -->
+    <div class="card" style="margin-top: 20px;">
+      <div class="card-header-row">
+        <h2 style="font-size: 16px; font-weight: 600;">Distributed File Storage — Regions</h2>
+        <button class="btn btn-secondary" style="font-size: 12px;" onclick="loadStorage()">Refresh</button>
+      </div>
+      <p style="font-size:12px; color:var(--text-muted); margin-bottom:10px;">
+        Uploaded requirement photos are copied to every storage region (each its own container and folder).
+        Stop one (<code>docker compose stop storage-mumbai</code>) and photos still open from another region.
+      </p>
+      <table class="table" style="width:100%; font-size:13px;">
+        <thead><tr><th>Region</th><th>Address</th><th>Status</th><th>Files held</th></tr></thead>
+        <tbody id="storage-body"><tr><td colspan="4">Loading...</td></tr></tbody>
+      </table>
+      <div id="storage-files" style="font-size:12px; color:var(--text-muted); margin-top:10px;"></div>
+    </div>
+
+    <!-- Unit 3: Election Algorithms (Bully) -->
+    <div class="card" style="margin-top: 20px;">
+      <div class="card-header-row">
+        <h2 style="font-size: 16px; font-weight: 600;">Coordinator — Bully Election Algorithm</h2>
+        <button class="btn btn-primary" style="font-size: 12px;" onclick="triggerElection()">Trigger Election</button>
+      </div>
+      <p style="font-size:12px; color:var(--text-muted); margin-bottom:10px;">
+        The highest-ranked ONLINE node (by numeric ID suffix) is always coordinator. Stop that node's container and
+        refresh — a new election runs automatically the instant this page notices the coordinator is unreachable.
+      </p>
+      <div id="coordinator-box" style="font-size:14px; font-weight:600; margin-bottom:10px;">—</div>
+      <details>
+        <summary style="cursor:pointer; font-size:12px; color:var(--primary);">Show last election's message trace</summary>
+        <div id="election-trace" style="font-size:12px; font-family:monospace; margin-top:8px; color:var(--text-muted); line-height:1.7;">—</div>
+      </details>
+    </div>
+
+    <!-- Unit 3: Clock Synchronization + Logical Clocks -->
+    <div class="card" style="margin-top: 20px;">
+      <h2 style="font-size: 16px; font-weight: 600; margin-bottom: 4px;">Clocks — Lamport Logical Clocks &amp; Cristian's Algorithm</h2>
+      <p style="font-size:12px; color:var(--text-muted); margin-bottom:10px;">
+        Each node keeps its own Lamport counter (no shared clock exists). "Offset" is each node's estimated physical
+        clock skew vs. Main API, computed via Cristian's Algorithm from ordinary health-check round-trip time.
+      </p>
+      <table class="table" style="width:100%; font-size:13px;">
+        <thead><tr><th>Node</th><th>Lamport Clock</th><th>Est. Clock Offset</th></tr></thead>
+        <tbody id="clocks-body"><tr><td colspan="3">Loading...</td></tr></tbody>
+      </table>
+      <div style="font-size:12px; color:var(--text-muted); margin-top:8px;">
+        Main API's own Lamport clock: <strong id="main-lamport">—</strong> ·
+        Vector clock (as observed by Main API): <code id="vector-clock" style="font-size:11px;">—</code>
+      </div>
+    </div>
+
+    <!-- Unit 3: Distributed Event Log (Logical Clocks + Mutual Exclusion trace) -->
+    <div class="card" style="margin-top: 20px;">
+      <div class="card-header-row">
+        <h2 style="font-size: 16px; font-weight: 600;">Distributed Event Log</h2>
+        <button class="btn btn-secondary" style="font-size: 12px;" onclick="loadEvents()">Refresh</button>
+      </div>
+      <p style="font-size:12px; color:var(--text-muted); margin-bottom:10px;">
+        Every entry is stamped with the Lamport clock at the moment it was recorded — read top-to-bottom for the
+        system's actual causal order, which can differ from wall-clock order under network delay.
+        <code>mutex_request</code>/<code>mutex_grant</code>/<code>mutex_deny</code> entries are the Mutual Exclusion
+        Algorithms topic: the request/grant-or-deny sequence around each atomic stock reservation or image-requirement claim.
+      </p>
+      <div id="events-list" style="font-size:12px; font-family:monospace; line-height:1.8;">Loading...</div>
+    </div>
+
+    <!-- Unit 3: Global State / Chandy-Lamport Snapshot -->
+    <div class="card" style="margin-top: 20px;">
+      <div class="card-header-row">
+        <h2 style="font-size: 16px; font-weight: 600;">Global State Snapshot</h2>
+        <button class="btn btn-primary" style="font-size: 12px;" onclick="takeSnapshot()">Take Snapshot</button>
+      </div>
+      <p style="font-size:12px; color:var(--text-muted); margin-bottom:10px;">
+        Captures Main API's own state plus every online node's inventory within one call, tagged with the logical
+        clock position at capture — a simplified, single-hub take on the Chandy-Lamport global snapshot algorithm.
+      </p>
+      <div id="snapshot-box">No snapshot taken yet this session.</div>
+    </div>
+
+    <p style="font-size: 12px; color: var(--text-muted); margin-top: 16px;">
+      Auto-refreshes every 5 seconds. Stop a container (<code>docker compose stop distributor-b</code>) or add
+      Distributor D (<code>docker compose --profile scale up -d distributor-d</code> or <code>python add_distributor_d.py</code>
+      locally) and watch this page update.
+    </p>
+  </main>
+
+  <script src="js/api.js"></script>
+  <script>
+    requireAuth();
+
+    function nodeCard(n) {
+      const badge = n.status === 'online'
+        ? `<span class="badge badge-success">ONLINE</span>`
+        : `<span class="badge badge-danger">OFFLINE</span>`;
+      return `
+        <div style="display:flex; justify-content:space-between; align-items:center; padding:14px 0; border-bottom:1px solid var(--border);">
+          <div>
+            <div style="font-weight:700; font-size:14px;">${n.name} <span style="font-weight:400; color:var(--text-muted); font-size:12px;">(${n.distributor_id})</span></div>
+            <div style="font-size:12px; color:var(--text-muted); margin-top:2px;">Address: ${n.grpc_address}</div>
+            ${n.status === 'online' ? `<div style="font-size:12px; color:var(--text-muted);">Last response: ${n.response_ms} ms · Lamport clock: ${n.lamport_clock}</div>` : ''}
+          </div>
+          ${badge}
+        </div>`;
+    }
+
+    function fmtOffset(ms) {
+      if (ms === null || ms === undefined) return '—';
+      const sign = ms >= 0 ? '+' : '';
+      return `${sign}${ms} ms`;
+    }
+
+    async function loadStatus() {
+      try {
+        const data = await apiFetch('/api/network/status');
+        document.getElementById('stat-registered').textContent = data.registered_nodes;
+        document.getElementById('stat-online').textContent = data.online;
+        document.getElementById('stat-offline').textContent = data.offline;
+        document.getElementById('nodes-list').innerHTML = data.nodes.map(nodeCard).join('');
+
+        document.getElementById('coordinator-box').innerHTML = data.coordinator
+          ? `<span class="badge badge-success">COORDINATOR</span> ${data.coordinator}${data.auto_election_just_ran ? ' <span style="font-weight:400; color:var(--text-muted); font-size:12px;">(just auto-elected)</span>' : ''}`
+          : `<span class="badge badge-muted">No coordinator</span> — no nodes online`;
+        if (data.last_election) {
+          document.getElementById('election-trace').innerHTML = data.last_election.trace.map(l => l.replace(/</g, '&lt;')).join('<br>');
+        }
+
+        document.getElementById('clocks-body').innerHTML = data.nodes.map(n => `
+          <tr>
+            <td>${n.distributor_id}</td>
+            <td>${n.lamport_clock ?? '—'}</td>
+            <td>${fmtOffset(n.clock_offset_ms)}</td>
+          </tr>`).join('');
+        document.getElementById('main-lamport').textContent = data.main_lamport_clock;
+        document.getElementById('vector-clock').textContent = JSON.stringify(data.vector_clock);
+      } catch (e) {
+        document.getElementById('nodes-list').innerHTML = '<div class="alert alert-error">' + e.message + '</div>';
+      }
+    }
+
+    async function loadEvents() {
+      const el = document.getElementById('events-list');
+      try {
+        const data = await apiFetch('/api/network/events?limit=20');
+        if (!data.events.length) { el.innerHTML = 'No events recorded yet.'; return; }
+        el.innerHTML = data.events.map(e =>
+          `<div>[L${e.lamport_clock}] <strong>${e.event_type}</strong> — ${e.description}</div>`
+        ).join('');
+      } catch (e) { el.innerHTML = `<div class="alert alert-error">${e.message}</div>`; }
+    }
+
+    async function triggerElection() {
+      try {
+        await apiFetch('/api/network/election', { method: 'POST' });
+        await loadStatus();
+      } catch (e) { alert(e.message); }
+    }
+
+    async function takeSnapshot() {
+      const el = document.getElementById('snapshot-box');
+      el.innerHTML = 'Capturing...';
+      try {
+        const snap = await apiFetch('/api/network/snapshot', { method: 'POST' });
+        const nodeLines = Object.entries(snap.nodes).map(([did, n]) =>
+          `<div>${did}: ${n.reachable_at_capture ? '<span class="badge badge-success">reachable</span>' : '<span class="badge badge-danger">unreachable</span>'} · ${n.medicine_count} SKUs · known clock ${n.known_lamport_clock ?? '—'}</div>`
+        ).join('');
+        el.innerHTML = `
+          <div style="font-size:13px;">
+            <strong>${snap.snapshot_id}</strong> — captured at logical time L${snap.main_api.lamport_clock}<br>
+            Main API: ${snap.main_api.total_orders} orders total (${JSON.stringify(snap.main_api.orders_by_status)})<br>
+            ${nodeLines}
+          </div>`;
+      } catch (e) { el.innerHTML = `<div class="alert alert-error">${e.message}</div>`; }
+    }
+
+    async function loadStorage() {
+      try {
+        const d = await apiFetch('/api/storage/status');
+        document.getElementById('storage-body').innerHTML = d.regions.map(r => `
+          <tr>
+            <td><strong>${r.region}</strong></td>
+            <td><code>${r.address}</code></td>
+            <td>${r.status === 'online' ? '<span class="badge badge-success">ONLINE</span>' : '<span class="badge badge-danger">OFFLINE</span>'}</td>
+            <td>${r.file_count ?? '—'}</td>
+          </tr>`).join('');
+        document.getElementById('storage-files').innerHTML = d.files.length
+          ? d.files.map(f => `<div><code>${f.filename}</code> → copies in: <strong>${f.regions.join(', ')}</strong></div>`).join('')
+          : 'No photos stored yet — upload a requirement photo from a Pharmacy dashboard.';
+      } catch (e) {
+        document.getElementById('storage-body').innerHTML = `<tr><td colspan="4">${e.message}</td></tr>`;
+      }
+    }
+
+    loadStatus();
+    loadEvents();
+    loadStorage();
+    setInterval(loadStatus, 5000);
+    setInterval(loadEvents, 8000);
+    setInterval(loadStorage, 5000);
+  </script>
+</body>
+</html>

@@ -1,0 +1,491 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pharmacy Dashboard — MediConnect</title>
+  <link rel="stylesheet" href="css/design-system.css">
+</head>
+<body>
+  <nav class="navbar">
+    <a href="pharmacy-dashboard.html" class="nav-brand">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M2 12h20"/></svg>
+      MediConnect
+    </a>
+    <div class="nav-menu">
+      <a href="network-status.html" class="btn btn-secondary" style="font-size: 13px; padding: 6px 12px;">Network Status</a>
+      <span id="user-label" style="font-size: 13px; color: var(--text-muted);"></span>
+      <a href="#" onclick="logout()" class="btn btn-secondary" style="font-size: 13px; padding: 6px 12px;">Log Out</a>
+    </div>
+  </nav>
+
+  <main class="container" style="margin-top: 24px;">
+    <div style="margin-bottom: 20px;">
+      <h1 id="pharmacy-title" style="font-size: 22px; font-weight: 700;">Pharmacy Dashboard</h1>
+      <p style="color: var(--text-muted); font-size: 13px;">Local inventory, supplier search, and requirement lists</p>
+    </div>
+
+    <div class="grid" style="grid-template-columns: repeat(5, 1fr); gap: 14px; margin-bottom: 24px;">
+      <div class="card stat-card"><div class="stat-label">Total Medicines</div><div class="stat-value" id="stat-total">—</div></div>
+      <div class="card stat-card"><div class="stat-label">Low Stock</div><div class="stat-value" id="stat-lowstock" style="color: var(--status-low-text);">—</div></div>
+      <div class="card stat-card"><div class="stat-label">Out of Stock</div><div class="stat-value" id="stat-outstock" style="color: var(--status-out-text);">—</div></div>
+      <div class="card stat-card"><div class="stat-label">Active Orders</div><div class="stat-value" id="stat-orders">—</div></div>
+      <div class="card stat-card"><div class="stat-label">Active Requirements</div><div class="stat-value" id="stat-requirements">—</div></div>
+    </div>
+
+    <!-- Local Inventory -->
+    <div class="card">
+      <div class="card-header-row">
+        <h2 style="font-size: 16px; font-weight: 600;">Local Inventory</h2>
+        <button class="btn btn-primary" style="font-size: 12px;" onclick="openRequirementBuilder()">Create Requirement List</button>
+      </div>
+      <table class="table" style="width:100%;">
+        <thead><tr><th>Medicine</th><th>Medicine ID</th><th>Stock</th><th>Status</th><th>Actions</th></tr></thead>
+        <tbody id="inventory-body"><tr><td colspan="6">Loading...</td></tr></tbody>
+      </table>
+    </div>
+
+    <!-- Find Suppliers -->
+    <div class="card" style="margin-top: 20px;">
+      <h2 style="font-size: 16px; font-weight: 600; margin-bottom: 12px;">Find Suppliers — Urgent Single Medicine Search</h2>
+      <input type="text" id="search-input" class="form-input" placeholder="Search medicine across the distributor network..." onkeyup="if(event.key==='Enter') runSearch()">
+      <button class="btn btn-primary" style="margin-top: 8px;" onclick="runSearch()">Search</button>
+      <div id="search-results" style="margin-top: 14px;"></div>
+    </div>
+
+    <!-- Active Requirements -->
+    <div class="card" style="margin-top: 20px;">
+      <div class="card-header-row">
+        <h2 style="font-size: 16px; font-weight: 600;">Active Requirement Lists</h2>
+        <button class="btn btn-secondary" style="font-size: 12px;" onclick="loadRequirements()">Refresh</button>
+      </div>
+      <div id="requirements-list">Loading...</div>
+    </div>
+
+    <!-- Photo Requirement (multimedia) — stored across the Distributed File System -->
+    <div class="card" style="margin-top: 20px;">
+      <div class="card-header-row">
+        <h2 style="font-size: 16px; font-weight: 600;">Upload Requirement Photo</h2>
+        <button class="btn btn-secondary" style="font-size: 12px;" onclick="loadImageRequirements()">Refresh</button>
+      </div>
+      <p style="font-size:12px; color:var(--text-muted); margin-bottom:10px;">
+        Snap a photo of a needs list and broadcast it to every distributor at once — the first one to accept takes the order.
+        The photo is copied to every storage region (Pune / Mumbai / Delhi), so it survives a region going down.
+      </p>
+      <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+        <input type="file" id="img-req-file" accept="image/jpeg,image/png,image/webp" class="form-input" style="max-width:280px;">
+        <input type="text" id="img-req-note" class="form-input" placeholder="Optional note (e.g. urgent)" style="max-width:220px;">
+        <button class="btn btn-primary" style="font-size:13px;" onclick="uploadImageRequirement()">Broadcast to Distributors</button>
+      </div>
+      <div id="img-req-msg" style="font-size:12px; margin-top:8px; color:var(--text-muted);"></div>
+      <div id="image-requirements-list" style="margin-top:14px;">Loading...</div>
+    </div>
+
+    <!-- Orders -->
+    <div class="card" style="margin-top: 20px;">
+      <div class="card-header-row">
+        <h2 style="font-size: 16px; font-weight: 600;">My Procurement Orders</h2>
+        <button class="btn btn-secondary" style="font-size: 12px;" onclick="loadOrders()">Refresh</button>
+      </div>
+      <div id="orders-list">Loading...</div>
+    </div>
+  </main>
+
+  <!-- Requirement Builder Modal -->
+  <div id="req-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.4); z-index:100; align-items:center; justify-content:center; overflow:auto;">
+    <div class="card" style="width: 560px; max-height: 85vh; overflow-y:auto;">
+      <h3 style="font-size:16px; font-weight:600; margin-bottom:4px;">Create Medicine Requirement List</h3>
+      <p style="font-size:12px; color:var(--text-muted); margin-bottom:12px;">Check any medicines you want to request, set quantity &amp; priority for each.</p>
+      <div id="req-modal-items"></div>
+      <div style="display:flex; gap:8px; margin-top:16px;">
+        <button class="btn btn-primary" style="flex:1;" onclick="submitRequirement()">Send Requirement to Distributors</button>
+        <button class="btn btn-secondary" style="flex:1;" onclick="closeRequirementBuilder()">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Edit Stock Modal -->
+  <div id="edit-stock-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.4); z-index:100; align-items:center; justify-content:center;">
+    <div class="card" style="width: 360px;">
+      <h3 style="font-size:16px; font-weight:600; margin-bottom:4px;">Edit Local Stock</h3>
+      <p id="edit-stock-label" style="font-size:13px; color:var(--text-muted); margin-bottom:12px;"></p>
+      <div class="form-group">
+        <label class="form-label">New Quantity</label>
+        <input type="number" id="edit-stock-qty" class="form-input" min="0">
+      </div>
+      <div style="display:flex; gap:8px; margin-top:12px;">
+        <button class="btn btn-primary" style="flex:1;" onclick="saveEditStock()">Save</button>
+        <button class="btn btn-secondary" style="flex:1;" onclick="closeEditStock()">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Requirement Comparison Modal -->
+  <div id="compare-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.4); z-index:100; align-items:center; justify-content:center; overflow:auto;">
+    <div class="card" style="width: 640px; max-height: 85vh; overflow-y:auto;">
+      <div class="card-header-row">
+        <h3 id="compare-title" style="font-size:16px; font-weight:600;">Distributor Responses</h3>
+        <button class="btn btn-secondary" style="font-size:12px;" onclick="closeCompareModal()">Close</button>
+      </div>
+      <div id="compare-status" style="margin-bottom:12px;"></div>
+      <div id="compare-table"></div>
+    </div>
+  </div>
+
+  <script src="js/api.js"></script>
+  <script src="js/ws.js"></script>
+
+  <script>
+    if (!requireAuth()) { /* redirected */ }
+    const user = getUser();
+    if (user && user.role !== 'pharmacy_staff') { window.location.href = '/distributor-dashboard.html'; }
+    const pharmacyId = user ? user.pharmacy_id : null;
+    document.getElementById('user-label').textContent = (user ? user.name + ' · ' + pharmacyId : '');
+    document.getElementById('pharmacy-title').textContent = 'Pharmacy Dashboard — ' + (pharmacyId || '');
+
+    function statusBadge(status) {
+      const map = {
+        available: 'badge badge-success', low_stock: 'badge badge-warning', out_of_stock: 'badge badge-danger',
+        unavailable: 'badge badge-muted', timeout: 'badge badge-muted',
+        requested: 'badge badge-info', approved: 'badge badge-success', rejected: 'badge badge-danger',
+        dispatched: 'badge badge-warning', received: 'badge badge-success',
+        open: 'badge badge-info',
+      };
+      const label = status.replace('_', ' ').toUpperCase();
+      return `<span class="${map[status] || 'badge'}">${label}</span>`;
+    }
+
+    let currentInventory = [];
+    let requirementSelection = {};
+
+    async function loadInventory() {
+      const el = document.getElementById('inventory-body');
+      try {
+        const data = await apiFetch(`/api/pharmacy/${pharmacyId}/inventory`);
+        currentInventory = data.medicines;
+        el.innerHTML = currentInventory.map(m => {
+          const status = m.quantity <= 0 ? 'out_of_stock' : (m.quantity <= m.low_stock_threshold ? 'low_stock' : 'available');
+          return `
+          <tr>
+            <td>${m.medicine_name}</td>
+            <td>${m.medicine_id}</td>
+            <td>${m.quantity}</td>
+            <td>${statusBadge(status)}</td>
+            <td style="display:flex; gap:6px;">
+              <button class="btn btn-secondary" style="font-size:11px; padding:5px 8px;" onclick="quickSearch('${m.medicine_name.replace(/'/g,"\\'")}')">Find Suppliers</button>
+              <button class="btn btn-secondary" style="font-size:11px; padding:5px 8px;" onclick="openEditStock('pharmacy','${m.medicine_id}','${m.medicine_name.replace(/'/g,"\\'")}',${m.quantity})">Edit Stock</button>
+            </td>
+          </tr>`;
+        }).join('');
+        document.getElementById('stat-total').textContent = currentInventory.length;
+        document.getElementById('stat-lowstock').textContent = currentInventory.filter(m => m.quantity > 0 && m.quantity <= m.low_stock_threshold).length;
+        document.getElementById('stat-outstock').textContent = currentInventory.filter(m => m.quantity <= 0).length;
+      } catch (e) { el.innerHTML = `<tr><td colspan="6">Failed to load: ${e.message}</td></tr>`; }
+    }
+
+    // Edit Stock (works for both pharmacy's own local inventory here, and
+    // is reused by distributor-dashboard.html for distributor inventory).
+    let editStockContext = null;
+    function openEditStock(kind, medicineId, medicineName, currentQty) {
+      editStockContext = { kind, medicineId };
+      document.getElementById('edit-stock-label').textContent = medicineName + ' (' + medicineId + ')';
+      document.getElementById('edit-stock-qty').value = currentQty;
+      document.getElementById('edit-stock-modal').style.display = 'flex';
+    }
+    function closeEditStock() { document.getElementById('edit-stock-modal').style.display = 'none'; }
+    async function saveEditStock() {
+      const newQty = parseInt(document.getElementById('edit-stock-qty').value, 10);
+      if (isNaN(newQty) || newQty < 0) { alert('Enter a valid quantity.'); return; }
+      try {
+        await apiFetch(`/api/pharmacy/${pharmacyId}/inventory/${editStockContext.medicineId}`, {
+          method: 'PUT', body: JSON.stringify({ new_quantity: newQty }),
+        });
+        closeEditStock();
+        loadInventory();
+      } catch (e) { alert(e.message); }
+    }
+
+    function quickSearch(name) {
+      document.getElementById('search-input').value = name;
+      runSearch();
+      document.getElementById('search-results').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+
+    async function runSearch() {
+      const q = document.getElementById('search-input').value.trim();
+      const el = document.getElementById('search-results');
+      if (!q) { el.innerHTML = ''; return; }
+      el.innerHTML = 'Searching all registered distributor nodes...';
+      try {
+        const data = await apiFetch('/api/medicines/search?query=' + encodeURIComponent(q));
+        if (!data.results.length) { el.innerHTML = '<div style="color:var(--text-muted); font-size:13px;">No distributors registered.</div>'; return; }
+        el.innerHTML = data.results.map(r => `
+          <div class="card" style="margin-bottom:10px; padding:14px;">
+            <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+              <div>
+                <div style="font-weight:700; font-size:14px;">${r.distributor_name || r.distributor_id} <span style="font-weight:400; color:var(--text-muted); font-size:12px;">(${r.distributor_id})</span></div>
+                ${r.available !== false && r.medicine_id ? `
+                  <div style="font-size:13px; margin-top:4px;">₹${r.price.toFixed(2)} / unit · ${r.quantity} available</div>
+                ` : `<div style="font-size:13px; margin-top:4px; color:var(--text-muted);">${r.error || 'No data'}</div>`}
+                <div style="font-size:11px; color:var(--text-muted); margin-top:2px;">Response: ${r.response_ms} ms</div>
+              </div>
+              <div style="text-align:right;">
+                ${statusBadge(r.status)}
+              </div>
+            </div>
+            ${r.medicine_id ? `
+            <div style="display:flex; gap:8px; margin-top:10px;">
+              <button class="btn btn-primary" style="font-size:12px; padding:6px 10px;" onclick="placeOrder('${r.distributor_id}','${r.medicine_id}','${r.name.replace(/'/g,"\\'")}',${r.price})">Place Order</button>
+              <a href="chat.html?room=CHAT-${pharmacyId}-${r.distributor_id}&with=${r.distributor_id}" class="btn btn-secondary" style="font-size:12px; padding:6px 10px;">Direct Chat</a>
+            </div>` : ''}
+          </div>
+        `).join('');
+      } catch (e) { el.innerHTML = '<div class="alert alert-error">' + e.message + '</div>'; }
+    }
+
+    async function placeOrder(distributorId, medicineId, medicineName, price) {
+      const qty = prompt(`How many units of ${medicineName} to order from ${distributorId}?`, "50");
+      if (!qty || isNaN(qty) || qty <= 0) return;
+      try {
+        await apiFetch('/api/orders', {
+          method: 'POST',
+          body: JSON.stringify({ distributor_id: distributorId, medicine_id: medicineId, medicine_name: medicineName, quantity: parseInt(qty), unit_price: price }),
+        });
+        alert('Order placed!');
+        loadOrders();
+      } catch (e) { alert(e.message); }
+    }
+
+    // Requirement Builder — shows EVERY medicine in local inventory with a
+    // checkbox right inside the modal, so items can be freely added/removed
+    // before sending, instead of relying on pre-checked table checkboxes.
+    function openRequirementBuilder() {
+      const container = document.getElementById('req-modal-items');
+      if (!currentInventory.length) {
+        container.innerHTML = '<p style="font-size:13px; color:var(--text-muted);">No local inventory loaded yet.</p>';
+        document.getElementById('req-modal').style.display = 'flex';
+        return;
+      }
+      container.innerHTML = currentInventory.map(m => {
+        const status = m.quantity <= 0 ? 'out_of_stock' : (m.quantity <= m.low_stock_threshold ? 'low_stock' : 'available');
+        const checked = !!requirementSelection[m.medicine_id];
+        const qty = checked ? requirementSelection[m.medicine_id].requested_quantity : 50;
+        const priority = checked ? requirementSelection[m.medicine_id].priority : 'Normal';
+        return `
+        <div style="display:flex; gap:8px; align-items:center; margin-bottom:8px; padding-bottom:8px; border-bottom:1px solid var(--border);">
+          <input type="checkbox" id="reqchk-${m.medicine_id}" ${checked ? 'checked' : ''}
+                 onchange="toggleReqSelect('${m.medicine_id}','${m.medicine_name.replace(/'/g,"\\'")}', this.checked)">
+          <div style="flex:1;">
+            <div style="font-weight:600; font-size:13px;">${m.medicine_name} ${statusBadge(status)}</div>
+            <div style="font-size:11px; color:var(--text-muted);">${m.medicine_id} · current stock: ${m.quantity}</div>
+          </div>
+          <input type="number" class="form-input" style="width:80px;" value="${qty}" min="1"
+                 onchange="setReqQty('${m.medicine_id}', this.value)">
+          <select class="form-input" style="width:100px;" onchange="setReqPriority('${m.medicine_id}', this.value)">
+            <option ${priority==='Normal'?'selected':''}>Normal</option>
+            <option ${priority==='High'?'selected':''}>High</option>
+            <option ${priority==='Urgent'?'selected':''}>Urgent</option>
+          </select>
+        </div>`;
+      }).join('');
+      document.getElementById('req-modal').style.display = 'flex';
+    }
+
+    function toggleReqSelect(medId, medName, checked) {
+      if (checked) {
+        if (!requirementSelection[medId]) requirementSelection[medId] = { medicine_id: medId, medicine_name: medName, requested_quantity: 50, priority: 'Normal' };
+      } else {
+        delete requirementSelection[medId];
+      }
+    }
+    function setReqQty(medId, val) {
+      if (requirementSelection[medId]) requirementSelection[medId].requested_quantity = parseInt(val, 10) || 1;
+    }
+    function setReqPriority(medId, val) {
+      if (requirementSelection[medId]) requirementSelection[medId].priority = val;
+    }
+
+    function closeRequirementBuilder() { document.getElementById('req-modal').style.display = 'none'; }
+
+    async function submitRequirement() {
+      const items = Object.values(requirementSelection);
+      if (!items.length) { alert('Select at least one medicine first.'); return; }
+      try {
+        const res = await apiFetch('/api/requirements', { method: 'POST', body: JSON.stringify({ items }) });
+        alert('Requirement ' + res.requirement_id + ' sent to the distributor network!');
+        requirementSelection = {};
+        closeRequirementBuilder();
+        loadRequirements();
+        loadInventory();
+      } catch (e) { alert(e.message); }
+    }
+
+    async function loadRequirements() {
+      const el = document.getElementById('requirements-list');
+      try {
+        const data = await apiFetch('/api/requirements');
+        document.getElementById('stat-requirements').textContent = data.requirements.filter(r => r.status === 'open').length;
+        if (!data.requirements.length) { el.innerHTML = '<div style="color:var(--text-muted); font-size:13px;">No requirements yet.</div>'; return; }
+        el.innerHTML = data.requirements.map(r => `
+          <div style="display:flex; justify-content:space-between; align-items:center; padding:12px 0; border-bottom:1px solid var(--border);">
+            <div>
+              <div style="font-weight:600; font-size:14px;">${r.requirement_id}</div>
+              <div style="font-size:13px;">${r.items.length} medicine(s) · ${r.response_count}/${r.distributor_count} distributors responded</div>
+            </div>
+            <button class="btn btn-primary" style="font-size:12px; padding:6px 10px;" onclick="openCompareModal('${r.requirement_id}')">View Responses</button>
+          </div>
+        `).join('');
+      } catch (e) { el.innerHTML = '<div class="alert alert-error">' + e.message + '</div>'; }
+    }
+
+    let compareSocket = null;
+    async function openCompareModal(reqId) {
+      document.getElementById('compare-title').textContent = 'Requirement ' + reqId + ' — Distributor Responses';
+      document.getElementById('compare-modal').style.display = 'flex';
+      await refreshCompare(reqId);
+      if (compareSocket) compareSocket.close();
+      compareSocket = connectRequirementStatusSocket(reqId, () => refreshCompare(reqId));
+    }
+    function closeCompareModal() {
+      document.getElementById('compare-modal').style.display = 'none';
+      if (compareSocket) { compareSocket.close(); compareSocket = null; }
+    }
+
+    async function refreshCompare(reqId) {
+      try {
+        const r = await apiFetch(`/api/requirements/${reqId}`);
+        document.getElementById('compare-status').innerHTML = r.distributor_status.map(d =>
+          `<span class="badge ${d.responded ? 'badge-success' : 'badge-muted'}" style="margin-right:6px;">${d.name}: ${d.responded ? 'Responded' : 'Waiting...'}</span>`
+        ).join('');
+
+        if (!r.responses.length) {
+          document.getElementById('compare-table').innerHTML = '<p style="font-size:13px; color:var(--text-muted);">No responses yet — waiting for distributors.</p>';
+          return;
+        }
+        document.getElementById('compare-table').innerHTML = `
+          <table class="table" style="width:100%;">
+            <thead><tr><th>Distributor</th><th>Can Fulfil</th><th>Approx. Price</th><th>Action</th></tr></thead>
+            <tbody>
+              ${r.responses.map(resp => `
+                <tr>
+                  <td>${resp.distributor_id}</td>
+                  <td>${resp.can_fulfil_all ? '<span class="badge badge-success">YES</span>' : '<span class="badge badge-warning">PARTIAL</span>'}</td>
+                  <td>₹${resp.total_price.toFixed(2)}</td>
+                  <td><a href="chat.html?room=CHAT-${pharmacyId}-${resp.distributor_id}&with=${resp.distributor_id}" class="btn btn-secondary" style="font-size:11px; padding:5px 8px;">Direct Chat</a></td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        `;
+      } catch (e) { console.error(e); }
+    }
+
+    async function loadOrders() {
+      const el = document.getElementById('orders-list');
+      try {
+        const data = await apiFetch('/api/orders');
+        document.getElementById('stat-orders').textContent = data.orders.filter(o => ['requested','approved','dispatched'].includes(o.status)).length;
+        if (!data.orders.length) { el.innerHTML = '<div style="color:var(--text-muted); font-size:13px;">No orders yet.</div>'; return; }
+        el.innerHTML = data.orders.map(o => `
+          <div style="display:flex; justify-content:space-between; align-items:center; padding:12px 0; border-bottom:1px solid var(--border);">
+            <div>
+              <div style="font-weight:600; font-size:14px;">${o.order_id} — ${o.distributor_id}</div>
+              <div style="font-size:13px;">${o.medicine_name} × ${o.quantity} units</div>
+            </div>
+            <div style="display:flex; align-items:center; gap:8px;">
+              ${statusBadge(o.status)}
+              ${o.status === 'dispatched' ? `<button class="btn btn-primary" style="font-size:12px; padding:6px 10px;" onclick="markReceived('${o.order_id}')">Mark as Received</button>` : ''}
+            </div>
+          </div>
+        `).join('');
+      } catch (e) { el.innerHTML = '<div class="alert alert-error">' + e.message + '</div>'; }
+    }
+
+    async function markReceived(orderId) {
+      try {
+        await apiFetch(`/api/orders/${orderId}/receive`, { method: 'POST' });
+        loadOrders(); loadInventory();
+      } catch (e) { alert(e.message); }
+    }
+
+    function refreshAll() { loadInventory(); loadRequirements(); loadImageRequirements(); loadOrders(); }
+    refreshAll();
+    setInterval(refreshAll, 20000);
+
+    // FA-1 Unit 4 — Distributed File System: one chip per storage region
+    // showing whether it holds a copy of this photo and whether it's online.
+    function regionChips(r, regions) {
+      const have = r.replicas || [];
+      if (!regions || !regions.length) return '';
+      if (!have.length) {
+        return '<div style="font-size:11px; margin-top:4px; color:var(--text-muted);">Stored on Main API only (no storage region was reachable at upload time)</div>';
+      }
+      return '<div style="margin-top:4px; display:flex; gap:4px; flex-wrap:wrap;">' + regions.map(g => {
+        const has = have.includes(g.region);
+        const online = g.status === 'online';
+        let cls, label;
+        if (has && online)       { cls = 'badge badge-success'; label = g.region + ' ✓'; }
+        else if (has && !online) { cls = 'badge badge-danger';  label = g.region + ' (offline)'; }
+        else                     { cls = 'badge badge-muted';   label = g.region + ' — no copy'; }
+        return `<span class="${cls}" style="font-size:10px; padding:2px 6px;">${label}</span>`;
+      }).join('') + '</div>';
+    }
+
+    function photoUrl(id) {
+      return `${API_BASE}/api/image-requirements/${id}/image?token=${encodeURIComponent(getToken())}`;
+    }
+
+    function photoThumb(id) {
+      return `<a href="${photoUrl(id)}" target="_blank" style="display:inline-block;">
+        <img src="${photoUrl(id)}" style="width:48px; height:48px; object-fit:cover; border-radius:6px; border:1px solid var(--border); display:block;"
+             onerror="this.style.display='none'; this.nextElementSibling.style.display='inline';">
+        <span style="display:none; font-size:12px; color:var(--primary); text-decoration:underline;">View Photo</span>
+      </a>`;
+    }
+
+    async function uploadImageRequirement() {
+      const fileInput = document.getElementById('img-req-file');
+      if (!fileInput.files.length) { alert('Choose a photo first.'); return; }
+      const fd = new FormData();
+      fd.append('file', fileInput.files[0]);
+      fd.append('note', document.getElementById('img-req-note').value);
+      try {
+        const res = await apiUpload('/api/image-requirements', fd);
+        fileInput.value = '';
+        document.getElementById('img-req-note').value = '';
+        const where = (res.replicated_to || []);
+        document.getElementById('img-req-msg').textContent = where.length
+          ? `Photo saved to ${where.length} storage region(s): ${where.join(', ')}.`
+          : 'No storage region was reachable — photo kept on Main API only.';
+        await loadImageRequirements();
+      } catch (e) { alert(e.message); }
+    }
+
+    async function loadImageRequirements() {
+      const el = document.getElementById('image-requirements-list');
+      try {
+        const data = await apiFetch('/api/image-requirements');
+        if (!data.image_requirements.length) { el.innerHTML = '<p style="font-size:13px; color:var(--text-muted);">No photo requirements uploaded yet.</p>'; return; }
+        el.innerHTML = data.image_requirements.map(r => `
+          <div style="display:flex; justify-content:space-between; align-items:center; padding:10px 0; border-bottom:1px solid var(--border);">
+            <div style="display:flex; gap:10px; align-items:center;">
+              ${photoThumb(r.image_requirement_id)}
+              <div>
+                <div style="font-weight:600; font-size:13px;">${r.image_requirement_id}${r.note ? ' — ' + r.note : ''}</div>
+                <div style="font-size:12px; color:var(--text-muted);">${new Date(r.created_at).toLocaleString()}${r.claimed_by_distributor_id ? ' · claimed by ' + r.claimed_by_distributor_id : ''}</div>
+                ${regionChips(r, data.regions)}
+              </div>
+            </div>
+            <div style="display:flex; gap:8px; align-items:center;">
+              ${r.status === 'open' ? '<span class="badge badge-info">OPEN — Broadcasting</span>' : '<span class="badge badge-success">CLAIMED</span>'}
+              ${r.order_id ? `<span style="font-size:11px; color:var(--text-muted);">${r.order_id}</span>` : ''}
+            </div>
+          </div>`).join('');
+      } catch (e) { el.innerHTML = `<div class="alert alert-error">${e.message}</div>`; }
+    }
+
+    connectOrdersSocket(pharmacyId, () => { loadOrders(); loadInventory(); });
+    connectImageRequirementsSocket(() => loadImageRequirements());
+  </script>
+</body>
+</html>

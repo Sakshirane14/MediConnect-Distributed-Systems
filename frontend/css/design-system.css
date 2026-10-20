@@ -1,0 +1,387 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+:root {
+  --primary: #0F9D8C;
+  --primary-dark: #0b7a6d;
+  --primary-light: #e6f6f4;
+  --accent: #4A90D9;
+  --bg-main: #FAFBFC;
+  --surface: #FFFFFF;
+  --text-main: #1F2933;
+  --text-muted: #6B7280;
+  --border: #E5E7EB;
+  
+  --status-avail-bg: #DCFCE7;
+  --status-avail-text: #166534;
+  --status-low-bg: #FEF3C7;
+  --status-low-text: #92400E;
+  --status-out-bg: #FEE2E2;
+  --status-out-text: #991B1B;
+  --status-unavail-bg: #F3F4F6;
+  --status-unavail-text: #4B5563;
+
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  background-color: var(--bg-main);
+  color: var(--text-main);
+  line-height: 1.5;
+  min-height: 100vh;
+}
+
+.container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 24px;
+}
+
+/* Navbar */
+.navbar {
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  padding: 16px 24px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  position: sticky;
+  top: 0;
+  z-index: 50;
+}
+
+.nav-brand {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--primary);
+  text-decoration: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.nav-menu {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+/* Cards */
+.card {
+  background: var(--surface);
+  border-radius: 12px;
+  box-shadow: var(--shadow-sm);
+  border: 1px solid var(--border);
+  padding: 24px;
+  margin-bottom: 24px;
+}
+
+.card-title {
+  font-size: 18px;
+  font-weight: 600;
+  margin-bottom: 16px;
+}
+
+/* Badges */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  border-radius: 9999px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.badge-available {
+  background: var(--status-avail-bg);
+  color: var(--status-avail-text);
+}
+
+.badge-low-stock {
+  background: var(--status-low-bg);
+  color: var(--status-low-text);
+}
+
+.badge-out-of-stock {
+  background: var(--status-out-bg);
+  color: var(--status-out-text);
+}
+
+.badge-unavailable {
+  background: var(--status-unavail-bg);
+  color: var(--status-unavail-text);
+}
+
+/* Buttons */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 18px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  border: none;
+  transition: all 0.2s;
+  text-decoration: none;
+}
+
+.btn-primary {
+  background: var(--primary);
+  color: white;
+}
+.btn-primary:hover {
+  background: var(--primary-dark);
+}
+
+.btn-secondary {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text-main);
+}
+.btn-secondary:hover {
+  background: var(--bg-main);
+}
+
+.btn-danger {
+  background: #EF4444;
+  color: white;
+}
+.btn-danger:hover {
+  background: #DC2626;
+}
+
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Forms */
+.form-group {
+  margin-bottom: 16px;
+}
+
+.form-label {
+  display: block;
+  font-size: 14px;
+  font-weight: 500;
+  margin-bottom: 6px;
+  color: var(--text-main);
+}
+
+.form-input {
+  width: 100%;
+  padding: 10px 14px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  font-size: 14px;
+  background: var(--surface);
+  transition: border-color 0.2s;
+}
+.form-input:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px var(--primary-light);
+}
+
+/* Grids */
+.grid-2 {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 20px;
+}
+
+.grid-3 {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 20px;
+}
+
+@media (max-width: 768px) {
+  .grid-2, .grid-3 {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Tables */
+.table-container {
+  overflow-x: auto;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+}
+
+.table th, .table td {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.table th {
+  background: var(--bg-main);
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+/* Stat Card */
+.stat-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 20px;
+}
+.stat-value {
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--primary);
+  margin-top: 4px;
+}
+
+/* Alert & Toast */
+.alert {
+  padding: 12px 16px;
+  border-radius: 8px;
+  font-size: 14px;
+  margin-bottom: 16px;
+}
+.alert-error {
+  background: var(--status-out-bg);
+  color: var(--status-out-text);
+}
+.alert-success {
+  background: var(--status-avail-bg);
+  color: var(--status-avail-text);
+}
+
+/* WebRTC Call Styles */
+.call-container {
+  display: flex;
+  flex-direction: column;
+  height: 85vh;
+  background: #111827;
+  border-radius: 16px;
+  overflow: hidden;
+}
+
+.video-grid {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  padding: 16px;
+}
+
+@media (max-width: 768px) {
+  .video-grid {
+    grid-template-columns: 1fr;
+    grid-template-rows: 1fr 1fr;
+  }
+}
+
+.video-box {
+  position: relative;
+  background: #1F2937;
+  border-radius: 12px;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.video-box video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.video-label {
+  position: absolute;
+  bottom: 12px;
+  left: 12px;
+  background: rgba(0, 0, 0, 0.6);
+  color: white;
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+}
+
+.call-controls {
+  background: #1F2937;
+  padding: 16px;
+  display: flex;
+  justify-content: center;
+  gap: 16px;
+}
+
+/* Generic grid + additional badge variants + stat label (B2B dashboards) */
+.grid {
+  display: grid;
+}
+
+@media (max-width: 900px) {
+  .grid[style*="repeat(5"], .grid[style*="repeat(4"] {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+  .grid[style*="1.1fr 1.5fr"] {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+.stat-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.badge-success { background: var(--status-avail-bg); color: var(--status-avail-text); }
+.badge-warning { background: var(--status-low-bg); color: var(--status-low-text); }
+.badge-danger  { background: var(--status-out-bg); color: var(--status-out-text); }
+.badge-muted   { background: var(--status-unavail-bg); color: var(--status-unavail-text); }
+.badge-info    { background: #DBEAFE; color: #1E40AF; }
+
+.card-header-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+/* Notification dropdown */
+.notification-wrap { position: relative; }
+.notification-bell { position: relative; min-width: 42px; padding: 8px 10px; }
+.notification-count {
+  position: absolute; top: -6px; right: -6px; min-width: 19px; height: 19px;
+  padding: 0 5px; border-radius: 999px; background: #EF4444; color: #fff;
+  font-size: 11px; font-weight: 700; display: none; align-items: center; justify-content: center;
+  border: 2px solid var(--surface);
+}
+.notification-panel {
+  display: none; position: absolute; right: 0; top: calc(100% + 10px); width: 360px;
+  max-height: 430px; overflow-y: auto; background: var(--surface); border: 1px solid var(--border);
+  border-radius: 12px; box-shadow: var(--shadow-lg); z-index: 200;
+}
+.notification-panel.open { display: block; }
+.notification-panel-header {
+  position: sticky; top: 0; background: var(--surface); padding: 13px 14px;
+  border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between;
+}
+.notification-item { padding: 12px 14px; border-bottom: 1px solid var(--border); font-size: 13px; }
+.notification-item.unread { background: var(--primary-light); }
+.notification-time { color: var(--text-muted); font-size: 11px; margin-top: 4px; }
+.notification-empty { padding: 24px 14px; color: var(--text-muted); font-size: 13px; text-align: center; }

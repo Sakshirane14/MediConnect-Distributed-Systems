@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MediConnect — Distributed Pharmacy Procurement Network</title>
+  <link rel="stylesheet" href="css/design-system.css">
+</head>
+<body>
+  <nav class="navbar">
+    <a href="index.html" class="nav-brand">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M2 12h20"/></svg>
+      MediConnect
+    </a>
+    <div class="nav-menu">
+      <span style="font-size: 13px; color: var(--text-muted);">FA-1 Distributed Systems Platform</span>
+    </div>
+  </nav>
+
+  <main class="container" style="max-width: 500px; margin-top: 40px;">
+    <div class="card">
+      <div style="text-align: center; margin-bottom: 24px;">
+        <h1 style="font-size: 24px; font-weight: 700; color: var(--primary);">Welcome to MediConnect</h1>
+        <p style="color: var(--text-muted); font-size: 14px; margin-top: 4px;">Search, compare, and procure from multiple independent medicine distributors</p>
+      </div>
+
+      <div style="display: flex; gap: 8px; margin-bottom: 20px; background: var(--bg-main); padding: 4px; border-radius: 8px;">
+        <button id="tab-pharmacy" class="btn btn-primary" style="flex: 1; font-size: 13px;" onclick="setRole('pharmacy_staff')">Pharmacy Staff</button>
+        <button id="tab-distributor" class="btn btn-secondary" style="flex: 1; font-size: 13px;" onclick="setRole('distributor_staff')">Distributor Staff</button>
+      </div>
+
+      <div id="alert-box" style="display: none;"></div>
+
+      <form id="auth-form" onsubmit="handleAuth(event)">
+        <div id="name-group" class="form-group" style="display: none;">
+          <label class="form-label">Full Name</label>
+          <input type="text" id="name-input" class="form-input" placeholder="e.g. Asha Kulkarni">
+        </div>
+
+        <div id="pharmacy-select-group" class="form-group" style="display: none;">
+          <label class="form-label">Select Pharmacy</label>
+          <select id="pharmacy-select" class="form-input">
+            <option value="PHA001">Pharmacy A (PHA001)</option>
+            <option value="PHB002">Pharmacy B (PHB002)</option>
+            <option value="PHC003">Pharmacy C (PHC003)</option>
+          </select>
+        </div>
+
+        <div id="distributor-select-group" class="form-group" style="display: none;">
+          <label class="form-label">Select Distributor Node</label>
+          <select id="distributor-select" class="form-input">
+            <option value="DIS001">HealthMed Distributors (DIS001)</option>
+            <option value="DIS002">CareSupply Healthcare (DIS002)</option>
+            <option value="DIS003">MediWholesale (DIS003)</option>
+            <option value="DIS004">QuickPharma Wholesale (DIS004 — scalability demo)</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Email Address</label>
+          <input type="email" id="email-input" class="form-input" placeholder="name@example.com" required>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Password</label>
+          <input type="password" id="password-input" class="form-input" placeholder="••••••••" required>
+        </div>
+
+        <button type="submit" id="submit-btn" class="btn btn-primary" style="width: 100%; margin-top: 8px;">
+          Log In
+        </button>
+      </form>
+
+      <div style="text-align: center; margin-top: 16px; font-size: 14px;">
+        <span id="toggle-text">Don't have an account?</span>
+        <a href="#" id="toggle-link" onclick="toggleMode(event)" style="color: var(--primary); font-weight: 500; text-decoration: none; margin-left: 4px;">Sign Up</a>
+      </div>
+
+      <div style="margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--border); font-size: 12px; color: var(--text-muted); text-align: center;">
+        Demo accounts (after running seed_demo_data.py): <br>
+        pharmacy.a/b/c@mediconnect.demo &middot; distributor.a/b/c@mediconnect.demo<br>
+        password for all: <code>Demo@1234</code>
+      </div>
+    </div>
+  </main>
+
+  <script src="js/api.js"></script>
+  <script>
+    let currentRole = 'pharmacy_staff';
+    let isRegisterMode = false;
+
+    function setRole(role) {
+      currentRole = role;
+      document.getElementById('tab-pharmacy').className = role === 'pharmacy_staff' ? 'btn btn-primary' : 'btn btn-secondary';
+      document.getElementById('tab-distributor').className = role === 'distributor_staff' ? 'btn btn-primary' : 'btn btn-secondary';
+      document.getElementById('pharmacy-select-group').style.display = (role === 'pharmacy_staff' && isRegisterMode) ? 'block' : 'none';
+      document.getElementById('distributor-select-group').style.display = (role === 'distributor_staff' && isRegisterMode) ? 'block' : 'none';
+    }
+
+    function toggleMode(e) {
+      e.preventDefault();
+      isRegisterMode = !isRegisterMode;
+      document.getElementById('name-group').style.display = isRegisterMode ? 'block' : 'none';
+      setRole(currentRole);
+      document.getElementById('submit-btn').textContent = isRegisterMode ? 'Create Account' : 'Log In';
+      document.getElementById('toggle-text').textContent = isRegisterMode ? 'Already have an account?' : "Don't have an account?";
+      document.getElementById('toggle-link').textContent = isRegisterMode ? 'Log In' : 'Sign Up';
+    }
+
+    async function handleAuth(e) {
+      e.preventDefault();
+      const email = document.getElementById('email-input').value;
+      const password = document.getElementById('password-input').value;
+      const alertBox = document.getElementById('alert-box');
+      alertBox.style.display = 'none';
+
+      try {
+        if (isRegisterMode) {
+          const name = document.getElementById('name-input').value;
+          const pharmacyId = currentRole === 'pharmacy_staff' ? document.getElementById('pharmacy-select').value : null;
+          const distributorId = currentRole === 'distributor_staff' ? document.getElementById('distributor-select').value : null;
+          const res = await apiFetch('/api/auth/register', {
+            method: 'POST',
+            body: JSON.stringify({ name, email, password, role: currentRole, pharmacy_id: pharmacyId, distributor_id: distributorId })
+          });
+          setAuth(res.access_token, { user_id: res.user_id, name: res.name, role: res.role, pharmacy_id: res.pharmacy_id, distributor_id: res.distributor_id });
+        } else {
+          const res = await apiFetch('/api/auth/login', {
+            method: 'POST',
+            body: JSON.stringify({ email, password })
+          });
+          setAuth(res.access_token, { user_id: res.user_id, name: res.name, role: res.role, pharmacy_id: res.pharmacy_id, distributor_id: res.distributor_id });
+        }
+
+        const user = getUser();
+        if (user.role === 'distributor_staff') {
+          window.location.href = '/distributor-dashboard.html';
+        } else {
+          window.location.href = '/pharmacy-dashboard.html';
+        }
+      } catch (err) {
+        alertBox.className = 'alert alert-error';
+        alertBox.textContent = err.message;
+        alertBox.style.display = 'block';
+      }
+    }
+  </script>
+</body>
+</html>

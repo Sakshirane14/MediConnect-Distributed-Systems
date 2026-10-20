@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Direct Chat — MediConnect</title>
+  <link rel="stylesheet" href="css/design-system.css">
+  <style>
+    .chat-wrap { max-width: 560px; margin: 24px auto; }
+    .chat-messages {
+      height: 380px; overflow-y: auto; padding: 16px;
+      background: var(--bg-main); border-radius: 8px; border: 1px solid var(--border);
+      display: flex; flex-direction: column; gap: 10px;
+    }
+    .msg { max-width: 75%; padding: 8px 12px; border-radius: 12px; font-size: 14px; line-height: 1.4; }
+    .msg.mine { align-self: flex-end; background: var(--primary); color: #fff; border-bottom-right-radius: 2px; }
+    .msg.theirs { align-self: flex-start; background: #fff; border: 1px solid var(--border); border-bottom-left-radius: 2px; }
+    .msg-meta { font-size: 10px; opacity: 0.7; margin-top: 2px; }
+    .chat-input-row { display: flex; gap: 8px; margin-top: 12px; }
+  </style>
+</head>
+<body>
+  <nav class="navbar">
+    <a href="#" onclick="history.back(); return false;" class="nav-brand">← Back</a>
+    <div class="nav-menu">
+      <span id="call-status" class="badge badge-info">Connecting...</span>
+    </div>
+  </nav>
+
+  <main class="container chat-wrap">
+    <div class="card">
+      <h2 id="chat-title" style="font-size:16px; font-weight:600; margin-bottom:4px;">Direct Chat</h2>
+      <p id="chat-subtitle" style="font-size:13px; color:var(--text-muted); margin-bottom:12px;"></p>
+
+      <div class="chat-messages" id="chat-messages"></div>
+
+      <div class="chat-input-row">
+        <input type="text" id="chat-input" class="form-input" placeholder="Type a message..." onkeyup="if(event.key==='Enter') sendChatMessage()" disabled>
+        <button class="btn btn-primary" id="send-btn" onclick="sendChatMessage()" disabled>Send</button>
+      </div>
+      <p style="font-size:11px; color:var(--text-muted); margin-top:8px;">
+        Messages travel peer-to-peer over a WebRTC RTCDataChannel once connected — not through the server.
+      </p>
+    </div>
+  </main>
+
+  <script src="js/api.js"></script>
+  <script src="js/webrtc.js"></script>
+  <script>
+    requireAuth();
+    const p = new URLSearchParams(window.location.search);
+    const roomId = p.get("room") || "GENERAL_CHAT";
+    const otherLabel = p.get("with") || "the other party";
+    const user = getUser();
+    const myLabel = user ? (user.role === 'pharmacy_staff' ? user.pharmacy_id : user.distributor_id) : 'Me';
+    const role = user ? (user.role === 'pharmacy_staff' ? ('Pharmacy ' + user.pharmacy_id) : ('Distributor ' + user.distributor_id)) : 'Peer';
+
+    document.getElementById('chat-title').textContent = 'Direct Chat — Room: ' + roomId;
+    document.getElementById('chat-subtitle').textContent = 'You are ' + role + ', chatting with ' + otherLabel;
+
+    const statusBadge = document.getElementById("call-status");
+    const messagesEl = document.getElementById("chat-messages");
+    const inputEl = document.getElementById("chat-input");
+    const sendBtn = document.getElementById("send-btn");
+
+    function addMessage(text, mine, meta) {
+      const div = document.createElement('div');
+      div.className = 'msg ' + (mine ? 'mine' : 'theirs');
+      div.innerHTML = text.replace(/</g, '&lt;') + (meta ? `<div class="msg-meta">${meta}</div>` : '');
+      messagesEl.appendChild(div);
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+    }
+
+    function onStatus(state, msg) {
+      statusBadge.textContent = msg;
+      if (state === "connected") {
+        statusBadge.className = "badge badge-success";
+        inputEl.disabled = false;
+        sendBtn.disabled = false;
+        inputEl.focus();
+      } else if (state === "error" || state === "ended") {
+        statusBadge.className = "badge badge-danger";
+        inputEl.disabled = true;
+        sendBtn.disabled = true;
+      } else {
+        statusBadge.className = "badge badge-info";
+      }
+    }
+
+    function onMessage(payload) {
+      addMessage(payload.text, false, payload.sender + ' · ' + new Date(payload.timestamp).toLocaleTimeString());
+    }
+
+    const session = new MediChatSession(roomId, onStatus, onMessage, role);
+    session.start();
+
+    function sendChatMessage() {
+      const text = inputEl.value.trim();
+      if (!text) return;
+      const ok = session.sendMessage(text, role);
+      if (ok) {
+        addMessage(text, true, 'You · ' + new Date().toLocaleTimeString());
+        inputEl.value = '';
+      } else {
+        alert('Not connected yet — please wait for the other side to join.');
+      }
+    }
+
+    window.addEventListener('beforeunload', () => session.hangUp());
+  </script>
+</body>
+</html>

@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Distributor Dashboard — MediConnect</title>
+  <link rel="stylesheet" href="css/design-system.css">
+</head>
+<body>
+  <nav class="navbar">
+    <a href="distributor-dashboard.html" class="nav-brand">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M2 12h20"/></svg>
+      MediConnect
+    </a>
+    <div class="nav-menu">
+      <a href="network-status.html" class="btn btn-secondary" style="font-size: 13px; padding: 6px 12px;">Network Status</a>
+      <span id="user-label" style="font-size: 13px; color: var(--text-muted);"></span>
+      <a href="#" onclick="logout()" class="btn btn-secondary" style="font-size: 13px; padding: 6px 12px;">Log Out</a>
+    </div>
+  </nav>
+
+  <main class="container" style="margin-top: 24px;">
+    <div style="margin-bottom: 20px;">
+      <h1 id="distributor-title" style="font-size: 22px; font-weight: 700;">Distributor Dashboard</h1>
+      <p style="color: var(--text-muted); font-size: 13px;">Your own independent inventory, requirements, and orders</p>
+    </div>
+
+    <div class="grid" style="grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 24px;">
+      <div class="card stat-card"><div class="stat-label">Total Medicines</div><div class="stat-value" id="stat-total">—</div></div>
+      <div class="card stat-card"><div class="stat-label">Low Stock</div><div class="stat-value" id="stat-lowstock" style="color: var(--status-low-text);">—</div></div>
+      <div class="card stat-card"><div class="stat-label">Pending Requirements</div><div class="stat-value" id="stat-requirements">—</div></div>
+      <div class="card stat-card"><div class="stat-label">Pending Orders</div><div class="stat-value" id="stat-orders">—</div></div>
+    </div>
+
+    <div class="card">
+      <div class="card-header-row"><h2 style="font-size: 16px; font-weight: 600;">My Inventory (DIS: {{ID}})</h2></div>
+      <table class="table" style="width:100%;">
+        <thead><tr><th>Medicine</th><th>Medicine ID</th><th>Quantity</th><th>Price</th><th>Status</th><th>Actions</th></tr></thead>
+        <tbody id="inventory-body"><tr><td colspan="6">Loading...</td></tr></tbody>
+      </table>
+    </div>
+
+    <div class="card" style="margin-top: 20px;">
+      <div class="card-header-row">
+        <h2 style="font-size: 16px; font-weight: 600;">Incoming Medicine Requirements</h2>
+        <button class="btn btn-secondary" style="font-size: 12px;" onclick="loadRequirements()">Refresh</button>
+      </div>
+      <div id="requirements-list">Loading...</div>
+    </div>
+
+    <div class="card" style="margin-top: 20px;">
+      <div class="card-header-row">
+        <h2 style="font-size: 16px; font-weight: 600;">Incoming Requirement Photos</h2>
+        <button class="btn btn-secondary" style="font-size: 12px;" onclick="loadImageRequirements()">Refresh</button>
+      </div>
+      <p style="font-size:12px; color:var(--text-muted); margin-bottom:10px;">
+        Broadcast to every distributor at once — first to accept wins the order. Photos are read from whichever storage region is alive.
+      </p>
+      <div id="image-requirements-list">Loading...</div>
+    </div>
+
+    <div class="card" style="margin-top: 20px;">
+      <div class="card-header-row">
+        <h2 style="font-size: 16px; font-weight: 600;">Incoming Orders</h2>
+        <button class="btn btn-secondary" style="font-size: 12px;" onclick="loadOrders()">Refresh</button>
+      </div>
+      <div id="orders-list">Loading...</div>
+    </div>
+  </main>
+
+  <!-- Requirement Detail Modal -->
+  <div id="req-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.4); z-index:100; align-items:center; justify-content:center; overflow:auto;">
+    <div class="card" style="width: 560px; max-height: 85vh; overflow-y:auto;">
+      <div class="card-header-row">
+        <h3 id="req-modal-title" style="font-size:16px; font-weight:600;">Requirement Detail</h3>
+        <button class="btn btn-secondary" style="font-size:12px;" onclick="closeReqModal()">Close</button>
+      </div>
+      <div id="req-modal-body"></div>
+      <div style="display:flex; gap:8px; margin-top:16px;">
+        <button class="btn btn-primary" id="respond-btn" style="flex:1;" onclick="submitResponse()">Evaluate &amp; Submit Response</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Edit Stock Modal -->
+  <div id="edit-stock-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.4); z-index:100; align-items:center; justify-content:center;">
+    <div class="card" style="width: 360px;">
+      <h3 style="font-size:16px; font-weight:600; margin-bottom:4px;">Edit Stock</h3>
+      <p id="edit-stock-label" style="font-size:13px; color:var(--text-muted); margin-bottom:12px;"></p>
+      <div class="form-group">
+        <label class="form-label">New Quantity</label>
+        <input type="number" id="edit-stock-qty" class="form-input" min="0">
+      </div>
+      <div style="display:flex; gap:8px; margin-top:12px;">
+        <button class="btn btn-primary" style="flex:1;" onclick="saveEditStock()">Save</button>
+        <button class="btn btn-secondary" style="flex:1;" onclick="closeEditStock()">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="js/api.js"></script>
+  <script src="js/ws.js"></script>
+  <script>
+    if (!requireAuth()) { /* redirected */ }
+    const user = getUser();
+    if (user && user.role !== 'distributor_staff') { window.location.href = '/pharmacy-dashboard.html'; }
+    const distributorId = user ? user.distributor_id : null;
+    document.getElementById('user-label').textContent = (user ? user.name + ' · ' + distributorId : '');
+    document.getElementById('distributor-title').textContent = 'Distributor Dashboard — ' + (distributorId || '');
+    document.querySelector('.card-header-row h2').textContent = 'My Inventory (' + distributorId + ')';
+
+    function statusBadge(status) {
+      const map = {
+        available: 'badge badge-success', low_stock: 'badge badge-warning', out_of_stock: 'badge badge-danger',
+        requested: 'badge badge-info', approved: 'badge badge-success', rejected: 'badge badge-danger',
+        dispatched: 'badge badge-warning', received: 'badge badge-success',
+      };
+      const label = status.replace('_', ' ').toUpperCase();
+      return `<span class="${map[status] || 'badge'}">${label}</span>`;
+    }
+
+    async function loadInventory() {
+      const el = document.getElementById('inventory-body');
+      try {
+        const data = await apiFetch(`/api/distributors/${distributorId}/inventory`);
+        el.innerHTML = data.medicines.map(m => `
+          <tr>
+            <td>${m.name}</td><td>${m.medicine_id}</td><td>${m.quantity}</td>
+            <td>₹${m.price.toFixed(2)}</td><td>${statusBadge(m.status)}</td>
+            <td><button class="btn btn-secondary" style="font-size:11px; padding:5px 8px;" onclick="openEditStock('${m.medicine_id}','${m.name.replace(/'/g,"\\'")}',${m.quantity})">Edit Stock</button></td>
+          </tr>`).join('');
+        document.getElementById('stat-total').textContent = data.medicines.length;
+        document.getElementById('stat-lowstock').textContent = data.medicines.filter(m => m.status === 'low_stock').length;
+      } catch (e) { el.innerHTML = `<tr><td colspan="6">Failed to load: ${e.message}</td></tr>`; }
+    }
+
+    let editStockMedicineId = null;
+    function openEditStock(medicineId, medicineName, currentQty) {
+      editStockMedicineId = medicineId;
+      document.getElementById('edit-stock-label').textContent = medicineName + ' (' + medicineId + ')';
+      document.getElementById('edit-stock-qty').value = currentQty;
+      document.getElementById('edit-stock-modal').style.display = 'flex';
+    }
+    function closeEditStock() { document.getElementById('edit-stock-modal').style.display = 'none'; }
+    async function saveEditStock() {
+      const newQty = parseInt(document.getElementById('edit-stock-qty').value, 10);
+      if (isNaN(newQty) || newQty < 0) { alert('Enter a valid quantity.'); return; }
+      try {
+        await apiFetch(`/api/distributors/${distributorId}/inventory/${editStockMedicineId}`, {
+          method: 'PUT', body: JSON.stringify({ new_quantity: newQty }),
+        });
+        closeEditStock();
+        loadInventory();
+      } catch (e) { alert(e.message); }
+    }
+
+    let currentRequirements = [];
+    async function loadRequirements() {
+      const el = document.getElementById('requirements-list');
+      try {
+        const data = await apiFetch('/api/requirements');
+        currentRequirements = data.requirements;
+        document.getElementById('stat-requirements').textContent = data.requirements.filter(r => !r.i_have_responded).length;
+        if (!data.requirements.length) { el.innerHTML = '<div style="color:var(--text-muted); font-size:13px;">No requirements yet.</div>'; return; }
+        el.innerHTML = data.requirements.map(r => `
+          <div style="display:flex; justify-content:space-between; align-items:center; padding:12px 0; border-bottom:1px solid var(--border);">
+            <div>
+              <div style="font-weight:600; font-size:14px;">${r.requirement_id} <span style="font-weight:400; color:var(--text-muted); font-size:12px;">from ${r.pharmacy_id}</span></div>
+              <div style="font-size:13px;">${r.items.length} medicine(s) requested</div>
+            </div>
+            <div style="display:flex; gap:8px; align-items:center;">
+              ${r.i_have_responded ? '<span class="badge badge-success">Responded</span>' : '<span class="badge badge-muted">Pending</span>'}
+              <button class="btn btn-primary" style="font-size:12px; padding:6px 10px;" onclick="openReqModal('${r.requirement_id}')">View Requirement</button>
+            </div>
+          </div>
+        `).join('');
+      } catch (e) { el.innerHTML = '<div class="alert alert-error">' + e.message + '</div>'; }
+    }
+
+    let currentReqId = null;
+    function openReqModal(reqId) {
+      currentReqId = reqId;
+      const r = currentRequirements.find(x => x.requirement_id === reqId);
+      document.getElementById('req-modal-title').textContent = reqId + ' — from ' + r.pharmacy_id;
+      document.getElementById('req-modal-body').innerHTML = `
+        <table class="table" style="width:100%;">
+          <thead><tr><th>Medicine</th><th>Requested Qty</th><th>Priority</th></tr></thead>
+          <tbody>${r.items.map(i => `<tr><td>${i.medicine_name}</td><td>${i.requested_quantity}</td><td>${i.priority}</td></tr>`).join('')}</tbody>
+        </table>`;
+      document.getElementById('respond-btn').disabled = r.i_have_responded;
+      document.getElementById('respond-btn').textContent = r.i_have_responded ? 'Already Responded' : 'Evaluate & Submit Response';
+      document.getElementById('req-modal').style.display = 'flex';
+    }
+    function closeReqModal() { document.getElementById('req-modal').style.display = 'none'; }
+
+    async function submitResponse() {
+      try {
+        const res = await apiFetch(`/api/requirements/${currentReqId}/respond`, { method: 'POST' });
+        alert(`Response submitted: ${res.can_fulfil_all ? 'Can fulfil in full' : 'Can partially fulfil'} — approx ₹${res.total_price}`);
+        closeReqModal();
+        loadRequirements();
+      } catch (e) { alert(e.message); }
+    }
+
+    async function loadOrders() {
+      const el = document.getElementById('orders-list');
+      try {
+        const data = await apiFetch('/api/orders');
+        document.getElementById('stat-orders').textContent = data.orders.filter(o => o.status === 'requested').length;
+        if (!data.orders.length) { el.innerHTML = '<div style="color:var(--text-muted); font-size:13px;">No orders yet.</div>'; return; }
+        el.innerHTML = data.orders.map(o => `
+          <div style="display:flex; justify-content:space-between; align-items:center; padding:12px 0; border-bottom:1px solid var(--border);">
+            <div>
+              <div style="font-weight:600; font-size:14px;">${o.order_id} — ${o.pharmacy_id}</div>
+              <div style="font-size:13px;">${o.medicine_name} × ${o.quantity} units</div>
+            </div>
+            <div style="display:flex; align-items:center; gap:8px;">
+              ${statusBadge(o.status)}
+              ${o.status === 'requested' ? `
+                <button class="btn btn-primary" style="font-size:12px; padding:6px 10px;" onclick="approveOrder('${o.order_id}')">Approve</button>
+                <button class="btn btn-secondary" style="font-size:12px; padding:6px 10px;" onclick="rejectOrder('${o.order_id}')">Reject</button>` : ''}
+              ${o.status === 'approved' ? `<button class="btn btn-primary" style="font-size:12px; padding:6px 10px;" onclick="dispatchOrder('${o.order_id}')">Dispatch</button>` : ''}
+              <a href="chat.html?room=CHAT-${o.pharmacy_id}-${distributorId}&with=${o.pharmacy_id}" class="btn btn-secondary" style="font-size:12px; padding:6px 10px;">Chat</a>
+            </div>
+          </div>
+        `).join('');
+      } catch (e) { el.innerHTML = '<div class="alert alert-error">' + e.message + '</div>'; }
+    }
+
+    async function approveOrder(orderId) {
+      try { await apiFetch(`/api/orders/${orderId}/approve`, { method: 'POST' }); loadOrders(); loadInventory(); }
+      catch (e) { alert(e.message); }
+    }
+    async function rejectOrder(orderId) {
+      try { await apiFetch(`/api/orders/${orderId}/reject`, { method: 'POST' }); loadOrders(); }
+      catch (e) { alert(e.message); }
+    }
+    async function dispatchOrder(orderId) {
+      try { await apiFetch(`/api/orders/${orderId}/dispatch`, { method: 'POST' }); loadOrders(); }
+      catch (e) { alert(e.message); }
+    }
+
+    function refreshAll() { loadInventory(); loadRequirements(); loadImageRequirements(); loadOrders(); }
+    refreshAll();
+    setInterval(refreshAll, 20000);
+    connectOrdersSocket(distributorId, () => { loadOrders(); loadInventory(); });
+
+    // FA-1 Unit 4 — Distributed File System: one chip per storage region
+    // showing whether it holds a copy of this photo and whether it's online.
+    function regionChips(r, regions) {
+      const have = r.replicas || [];
+      if (!regions || !regions.length) return '';
+      if (!have.length) {
+        return '<div style="font-size:11px; margin-top:4px; color:var(--text-muted);">Stored on Main API only (no storage region was reachable at upload time)</div>';
+      }
+      return '<div style="margin-top:4px; display:flex; gap:4px; flex-wrap:wrap;">' + regions.map(g => {
+        const has = have.includes(g.region);
+        const online = g.status === 'online';
+        let cls, label;
+        if (has && online)       { cls = 'badge badge-success'; label = g.region + ' ✓'; }
+        else if (has && !online) { cls = 'badge badge-danger';  label = g.region + ' (offline)'; }
+        else                     { cls = 'badge badge-muted';   label = g.region + ' — no copy'; }
+        return `<span class="${cls}" style="font-size:10px; padding:2px 6px;">${label}</span>`;
+      }).join('') + '</div>';
+    }
+
+    function photoUrl(id) {
+      return `${API_BASE}/api/image-requirements/${id}/image?token=${encodeURIComponent(getToken())}`;
+    }
+
+    function photoThumb(id) {
+      return `<a href="${photoUrl(id)}" target="_blank" style="display:inline-block;">
+        <img src="${photoUrl(id)}" style="width:48px; height:48px; object-fit:cover; border-radius:6px; border:1px solid var(--border); display:block;"
+             onerror="this.style.display='none'; this.nextElementSibling.style.display='inline';">
+        <span style="display:none; font-size:12px; color:var(--primary); text-decoration:underline;">View Photo</span>
+      </a>`;
+    }
+
+    async function loadImageRequirements() {
+      const el = document.getElementById('image-requirements-list');
+      try {
+        const data = await apiFetch('/api/image-requirements');
+        if (!data.image_requirements.length) { el.innerHTML = '<p style="font-size:13px; color:var(--text-muted);">No photo requirements right now.</p>'; return; }
+        el.innerHTML = data.image_requirements.map(r => {
+          const mine = r.claimed_by_distributor_id === distributorId;
+          const takenByOther = r.status !== 'open' && !mine;
+          let action;
+          if (r.status === 'open') action = `<button class="btn btn-primary" style="font-size:12px; padding:6px 10px;" onclick="claimImageRequirement('${r.image_requirement_id}')">Accept This Order</button>`;
+          else if (mine) action = `<span class="badge badge-success">You claimed it — ${r.order_id}</span>`;
+          else action = `<span class="badge badge-muted">Claimed by ${r.claimed_by_distributor_id}</span>`;
+          return `
+            <div style="display:flex; justify-content:space-between; align-items:center; padding:10px 0; border-bottom:1px solid var(--border); ${takenByOther ? 'opacity:0.55;' : ''}">
+              <div style="display:flex; gap:10px; align-items:center;">
+                ${photoThumb(r.image_requirement_id)}
+                <div>
+                  <div style="font-weight:600; font-size:13px;">${r.image_requirement_id} — from ${r.pharmacy_id}${r.note ? ' — ' + r.note : ''}</div>
+                  <div style="font-size:12px; color:var(--text-muted);">${new Date(r.created_at).toLocaleString()}</div>
+                  ${regionChips(r, data.regions)}
+                </div>
+              </div>
+              <div>${action}</div>
+            </div>`;
+        }).join('');
+      } catch (e) { el.innerHTML = `<div class="alert alert-error">${e.message}</div>`; }
+    }
+
+    async function claimImageRequirement(id) {
+      try {
+        const res = await apiFetch(`/api/image-requirements/${id}/claim`, { method: 'POST' });
+        alert(`You won it! Order ${res.order_id} created — approve it from Incoming Orders below.`);
+        await loadImageRequirements(); await loadOrders();
+      } catch (e) {
+        alert(e.message);   // 409 = someone else claimed it a moment earlier (expected race outcome)
+        await loadImageRequirements();
+      }
+    }
+
+    connectRequirementsFeedSocket(distributorId, () => loadRequirements());
+    connectImageRequirementsSocket(() => loadImageRequirements());
+  </script>
+</body>
+</html>
